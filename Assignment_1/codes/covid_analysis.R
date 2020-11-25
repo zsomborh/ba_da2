@@ -4,6 +4,9 @@ library(lspline)
 library(estimatr)
 library(texreg)
 library(ggthemes)
+library(xtable)
+library(car)
+
 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
@@ -114,6 +117,7 @@ htmlreg( list(reg1 , reg2 , reg3 , reg4),
          file = paste0( data_out ,'model_comparison.html'), include.ci = FALSE)
 
 
+
 # Prediction errors -------------------------------------------------------
 
 # Get the predicted y values from the model
@@ -128,3 +132,24 @@ df %>% top_n( -5 , reg4_res ) %>%
 # Find countries with largest positive errors
 df %>% top_n( 5 , reg4_res ) %>% 
     select( country , ln_death_pc , reg4_y_pred , reg4_res )
+
+
+
+# Testing hypothesis ------------------------------------------------------
+
+# Test if beta = 0
+
+lin <-linearHypothesis( reg1 , "ln_conf_pc = 0")
+
+tab<- tidy(reg1)
+
+tab <-  tab %>% 
+    filter(term == 'ln_conf_pc')  %>%  
+    transmute(
+        variable=term,
+        estimate = estimate,
+        std.error = std.error,
+        statistic = statistic,
+        p.value = p.value,
+        conf.low = conf.low,
+        conf.high = conf.high)

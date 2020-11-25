@@ -1,0 +1,159 @@
+---
+title: "Assignment 1"
+author: "Zsombor Hegedus"
+date: '2020 november 25 '
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r pack_n_load, include=FALSE}
+library(tidyverse)
+library(moments)
+library(xtable)
+library(ggpubr)
+require(scales)
+library(lspline)
+library(estimatr)
+library(texreg)
+library(ggthemes)
+#library(ggcorrplot)
+
+data_in <- "C:/Users/T450s/Desktop/programming/git/ba_da2/Assignment_1/data/clean/"
+df <- read_csv(paste0(data_in,"covid_pop_20201015_clean.csv"))
+```
+# Introduction
+
+In this analysis my focus is uncovering a pattern of association between the number of confirmed COVID-19 cases and the number of deaths caused by the virus.
+In this analysis I will use admin data, where variables, such as the number of deceased and infected people are from the [github repo](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_daily_reports) of Johns Hopkins University, and population data is collected from World Development Indicators maintained by the World Bank. The population of the analysis covers every country where such data was available, while the sample used for the analysis is narrowed to one date - the 15th of Oct, 2020. Potential data quality issues could arose from the fact that: 
+
+* Joining the two dataframes required entity resolution which is a manual process that always leaves room for data quality errors
+* There might be a bias in how countries collected or disclosed their information (e.g. some countries might not conduct enough tests hence the number of confirmed cases are low - or they might be using different criterion to indentify a COVID-19 death case)
+ 
+After entity resolution, I ended up with 168 observations in my data, where I dropped out cases with zero reported death cases since I did ln transformation where records with zero death could not have been defined. I used *per capita* variables so devided deaths and confirmed cases by the population - expressed in millions - of given country. My dependent variable $y$ was the number of deaths per capita caused by COVID-19 and my explanatory variable $x$ was the number of confirmed cases per capita in relation with the disease.
+
+```{r summary, include=FALSE}
+df <- df %>%
+    filter(deaths != 0) %>% 
+    mutate(
+        death_pc = as.numeric(deaths/(population/1000000)),
+        conf_pc = as.numeric(confirmed / (population/1000000)),
+        mortality = as.numeric(deaths/confirmed),
+        ln_conf_pc = log( conf_pc ),
+        ln_death_pc = log( death_pc ) 
+    )
+
+death_pc_sum <- df %>% summarise(
+    variable = 'Death per capita',
+    mean     = mean(death_pc),
+    median   = median(death_pc),
+    std      = sd(death_pc),
+    iq_range = IQR(death_pc), 
+    min      = min(death_pc),
+    max      = max(death_pc),
+    skew     = skewness(death_pc),
+    numObs   = sum( !is.na( death_pc ) ) )
+
+conf_pc_sum <- df %>% summarise(
+    variable = 'Confirmed cases per capita',
+    mean     = mean(conf_pc),
+    median   = median(conf_pc),
+    std      = sd(conf_pc),
+    iq_range = IQR(conf_pc), 
+    min      = min(conf_pc),
+    max      = max(conf_pc),
+    skew     = skewness(conf_pc),
+    numObs   = sum( !is.na( conf_pc ) ) )
+
+df_summary <- death_pc_sum %>% add_row( conf_pc_sum ) 
+xtb <- xtable(df_summary,type = "latex", caption = "Summary statistics of `x` and `y` variables")
+
+```
+
+```{r histograms_code, include = FALSE}
+p1<- ggplot( df , aes( x = death_pc ) ) +
+    geom_histogram( aes(y = ..density..) , alpha = 1, binwidth = 50, color = 'black', fill = 'white') +
+    geom_density( aes(y = ..density..) , alpha = .2 , bw = 50, color = 'black', fill="#FF6666") +
+    labs(x='Death per capita in millions for countries',y='Density')
+
+p2<- ggplot( df , aes( x = conf_pc ) ) +
+    geom_histogram( aes(y = ..density..) , alpha = 1, binwidth = 2000, color = 'black', fill = 'white') +
+    geom_density( aes(y = ..density..) , alpha = .2 , bw = 2000, color = 'black', fill="#56B4E9") +
+    labs(x='Confirmed COVID-19 cases per 1 million capita',y='Density')
+```
+
+```{r fig 1, fig.width=8,fig.height=1.5, fig.cap='Distribution of death and confirmed cases in relation to Covid-19 on 15th Oct, 2020', echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+ggarrange(p1, p2, nrow = 1 )
+```
+
+```{r, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+print(xtb, comment=FALSE, include.rownames=FALSE)
+```
+
+# EDA 
+
+Figure 1 shows the distribution of variables which is skewed with a fat right tail and a few extreme values (e.g. USA etc...) for both. The number of confirmed cases (visible in Table 1) far exceed the deaths - in my sample, ca.2.4% of the people that contracted COVID-19 died from the disease. Since the density plots resemble a lognormal distribution, it is an indicator that ln transformations might strengthen the results for both variables in the analysis.
+
+Substantive reasoning for choosing log-log model:
+
+* distribution of variables doesn't follow a normal distribution,
+* something else
+* something else
+
+Statistical reasons for choosing ln-ln transformation:
+
+* one
+* and a two
+
+# Model Choice 
+
+For the analysis I chose a simple linear regression between the log transformed y and x variables: 
+
+$$ln(y) = \alpha + ln(x)$$
+
+The estimated parameters can be found in the Appendix. $\alpha$ is not really meaningful to interpret, but it shows how many deaths can be associated in a case where we have 1 confirmed case. $\beta$ is the slope parameter, and it states that in this sample $\beta$% increase in the number of confirmed cases is associated with 1% higher number of deceased people due to Covid-19.    
+
+I conducted hypothesis testing as I was interested to see if my estimated $\beta$ parameter is significant at 5%:
+
+$$ H_{0}: \beta = 0,~~ H_{A}:\beta \neq 0 $$
+The below table shows the result of the regression which resulted in a 95% CI of [3.4, 3.23], which means that I can reject the $H_{0}$ with 95% confidence. The overall conclusion is that $\beta$ is significant in the level that I was interested in, therefore there is a positive pattern of association between the ln of confirmed covid-19 cases and the ln of cases resulting in deaths. 
+
+
+```{r, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+reg1 <- lm_robust( ln_death_pc ~ ln_conf_pc , data = df , se_type = "HC2" )
+
+tab<- tidy(reg1)
+
+tab <-  tab %>% 
+    filter(term == 'ln_conf_pc')  %>%  
+    transmute(
+        variable=term,
+        estimate = estimate,
+        std.error = std.error,
+        statistic = statistic,
+        p.value = p.value,
+        conf.low = conf.low,
+        conf.high = conf.high)
+
+xtb <- xtable(tab,type = "latex", caption = "Hypothesis testing for the slope of the regression")
+print(xtb,comment = FALSE, include.rownames = FALSE)
+```
+
+# Analysing residuals 
+
+**Countries with largest negative error**: add 2-3 sentences on these guys
+
+**Countries with lowest negative error **: add 2-3 sentences on these guys
+
+# Executive summary (3-5 sentences)
+
+I set out to see the pattern of association between the number of confirmed COVID cases and the number of deaths caused by covid-19 in all countries where this data is available. I used log-log transformation and scaled the number of confirmed and fallen people by the population of each country to arrive to 'per capita' variables. I used regression analysis to uncover these tendencies, and found in my sample for the 15th Oct, 2020 that there is a positive association between the two variables. The main message my model wish to convey is that understanding the number of people contracted by the virus is crucially important for governments, so that they can have an expectation as to how many people might die due to the disease. On the one hand my results could have been strengthened by including more variables such as  the age of people (or a categorical variable representing age groups) to see whether the virus is deadlier for the older population. My results, on the other hand could have been weakend by using level instead of log variables, as it was quite apparent in the EDA phase that without ln transformation my R squared would have dropped approximately to the third of what I was able to achieve with my final model. 
+
+# Appendix
+
+Model comparison table with scatter plot visaulisation with explanation on what you can see in the table 5-8 sentences - 4 model descr
+Stating choice of model - substantive and statistical reasoning 3-5 sentences
+
