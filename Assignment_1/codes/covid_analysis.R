@@ -38,20 +38,23 @@ df <- df %>%
 ## a) level-level - scaled
 ggplot( df , aes(x = conf_pc, y =death_pc )) +
     geom_point() +
-    geom_smooth(method="loess")
+    geom_smooth(method="loess") +
+    labs(x='Infected per 1 m capita',y='Dead per 1m capita')
 ## two extreme values in terms of confirmed cases/1m people: Qatar, Bahrein
 ## Otherwise there seems to be a positive trend
 
 ggplot( df , aes(x = conf_pc, y =death_pc )) +
     geom_point() +
     geom_smooth(method="loess")+
-    scale_x_continuous( trans = log_trans(),  breaks = c(1,2,5,10,20,50,100,200,500,1000,10000) )
+    scale_x_continuous( trans = log_trans(),  breaks = c(1,2,5,10,20,50,100,200,500,1000,10000) )+
+    labs(x='Infected per 1 m capita - ln scale',y='Dead per 1m capita')
 
 ggplot( df , aes(x = conf_pc, y =death_pc )) +
     geom_point() +
     geom_smooth(method="loess")+
     scale_x_continuous( trans = log_trans(),  breaks = c(1,2,5,10,20,50,100,200,500,1000,3000,10000) )+
-    scale_y_continuous( trans = log_trans(), breaks = c(1,20,200,400) )
+    scale_y_continuous( trans = log_trans(), breaks = c(1,20,200,400) )+
+    labs(x='Infected per 1 m capita - ln scale',y='Dead per 1m capita - ln scale')
 
 ## Conclusion - log-log transformation seems to be giving a good fit
 
