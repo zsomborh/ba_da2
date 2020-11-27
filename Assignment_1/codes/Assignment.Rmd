@@ -4,11 +4,11 @@ author: "Zsombor Hegedus"
 date: '2020 november 25 '
 output:
   pdf_document:
-    toc: false
-    #highlight: zenburn
-  html_document:
-    toc: true
-    theme: united
+    #toc: false
+    highlight: zenburn
+  #html_document:
+    #toc: true
+    #theme: united
 ---
 
 ```{r setup, include=FALSE}
@@ -139,16 +139,37 @@ tab <-  tab %>%
         conf.low = conf.low,
         conf.high = conf.high)
 
+# Predict with model
+df$reg1_y_pred <- reg1$fitted.values
+# Calculate the errors of the model
+df$reg1_res <- df$ln_death_pc - df$reg1_y_pred 
+
 xtb <- xtable(tab,type = "latex", caption = "Hypothesis testing for the slope of the regression")
 print(xtb,comment = FALSE, include.rownames = FALSE)
 ```
-
+\newpage
 # Analysing residuals 
 
-**Countries with largest negative error**: add 2-3 sentences on these guys
+Table 4 summarises the countries where my model projected $\hat{y}$ with the lowest negative errors. In these countries less people died than what the model implied. A number of reasons can explain the low number of deaths compared to the amount of confirmed cases. Some of these countries are very wealthy, so healthcare might be operating on a higher standard than in other countries. On the other hand it can also be that the density of population in given country is low, so that people don't interact and meet with others so much.
 
-**Countries with lowest negative error **: add 2-3 sentences on these guys
+```{r, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
 
+bottom5<- df %>% top_n( -5 , reg1_res ) %>% 
+    select( country , ln_death_pc , reg1_y_pred , reg1_res )
+
+xtb <- xtable(bottom5,type = "latex", caption = "5 Countries with the biggest negative residuals")
+print(xtb,comment = FALSE, include.rownames = FALSE)
+```
+
+Table 5 on the other hand summarises the countries where my model projected $\hat{y}$ with the highest positive errors. In these countries more people died than what the model implied. This can also be the result of many reasons, for example Italy and the UK were one of the first to be hit with COVID-19 in Europe - they became an epicenter of the disease very soon, and their healthcare system operated on the limit of its capabilities. The relatively high deceased people might also be due to the lack of precautionary lock-down measures, or operational issues with local healthcare.
+
+```{r, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+top5<- df %>% top_n( 5 , reg1_res ) %>% 
+    select( country , ln_death_pc , reg1_y_pred , reg1_res )
+
+xtb <- xtable(top5,type = "latex", caption = "5 Countries with the biggest negative residuals")
+print(xtb,comment = FALSE, include.rownames = FALSE)
+```
 # Executive summary (3-5 sentences)
 
 I set out to analyse the pattern of association between the number of confirmed COVID cases and the number of deaths caused by COVID-19 in all countries where this data is available. I used log-log transformation and scaled the number of confirmed and fallen people by the population of each country to arrive to 'per capita' variables. I used regression analysis to uncover these tendencies, and found in my sample for the 15th Oct, 2020 that there is a positive association between the two variables. The main message my model wish to convey is that understanding the number of people contracted by the virus is crucially important for governments, so that they can have an expectation as to how many people might die due to the disease. On the one hand my results could have been strengthened by including more variables such as  the age of people (or a categorical variable representing age groups) to see whether the virus is deadlier for the older population. My results, on the other hand could have been weakend by using level instead of log variables, as it was quite apparent in the EDA phase that without ln transformation my R squared would have dropped approximately to the third of what I was able to achieve with my final model. 
@@ -157,6 +178,7 @@ I set out to analyse the pattern of association between the number of confirmed 
 
 ### Transforming variables
 
+The below is to show why log-log model was the best choice when deciding on transformation of variables. 
 ```{r fig 2, fig.width=8,fig.height=2.6, fig.cap='Scatter plots between deaths and confirmed cases in relation to COVID-19 for the examined countries on 15th Oct, 2020 - lowess functions', echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
 
 p1<- ggplot( df , aes(x = conf_pc, y =death_pc )) +
@@ -183,10 +205,18 @@ ggarrange(p1, p2,p3, nrow = 1 )
 
 ```
 
-### Model Comparison
+### Model Comparison and model choice
 
-Model comparison table with scatter plot visaulisation with explanation on what you can see in the table 5-8 sentences - 4 model descr
-Stating choice of model - substantive and statistical reasoning 3-5 sentences
+The below table and scatter plots serve as summary for four regression models that I run in order to uncover the pattern of association between my log transformed $x$ and $y$ variables. The models were ther following:
+
+* **Model 1** - simple linear regression
+* **Model 2** - a quadratic regression
+* **Model 3** - piecewise linear spline with two cutoffs that I determined looking at the lowess function which is also visible in Figure 2
+* **Model 4** - weighted regression where the weight was the population of a country
+
+All  the above models estimated a positive trend in our sample indicating that the number of death per 1 million capita is higher for higher number of confirmed cases per 1m capita. All models showed a very good fit, with R^2^ being 0.79 in the first 3 models and 0.9 for the last one. In Model 4 we can see that countries with bigger population (indicated with bigger size for the dots) are very close to the trend line, which is probably the reason why the fit was much better. However weighting is not really sensible, since we already examine per capita variables. The estimated slope parameters were significant at 5% in every case, except the squared parameter for the quadratic case. We can aslo see from the scatter plots that the relationship is closer to linear, than non-linear, so probably not even higher order polynomials would provide a much better fit. From the looks of it, the dot's are also spread around the estimated $\hat{y}$ variables in a quite symmetric, seemingly homoskedastic manner.   
+
+For my analysis I chose  **Model 1**, the simple linear regression. The pattern of association in the data clearly indicates a linear relationship between the log number of confirmed cases per 1m capita and log deaths per 1m capita. This linear pattern is also understood between virologist and other experts - if someone contracts this disease, there is a possibility that it kills them, so the more people are infected, the more deaths a country can expect to happen. In addition to that, regression estimates in the simple case are the easiest to translate.     
 
 ```{r regression_codes, include = FALSE}
 
@@ -208,37 +238,38 @@ reg4 <- lm_robust(ln_death_pc ~ ln_conf_pc, data = df , weights = population)
 ## linear
 p1<- ggplot( data = df, aes( x = ln_conf_pc, y = ln_death_pc ) ) + 
     geom_point( color='blue') +
-    geom_smooth( method = lm , color = 'red' )
+    geom_smooth( method = lm , color = 'red' ) +
+     labs(x='Log infected per 1m capita',y='Log dead per 1m capita')
 
 ## quadratic
 p2<- ggplot( data = df, aes( x = ln_conf_pc, y = ln_death_pc ) ) + 
     geom_point( color='blue') +
-    geom_smooth( formula = y ~ poly(x,2) , method = lm , color = 'red' )
+    geom_smooth( formula = y ~ poly(x,2) , method = lm , color = 'red' )+
+     labs(x='Log infected per 1m capita',y='Log dead per 1m capita')
 
 
 ## pls
 
 p3 <- ggplot( data = df, aes( x = ln_conf_pc, y = ln_death_pc ) ) + 
     geom_point( color='blue') +
-    geom_smooth( formula = y ~ lspline(x,ln_cutoff) , method = lm , color = 'red' )
+    geom_smooth( formula = y ~ lspline(x,ln_cutoff) , method = lm , color = 'red' )+
+     labs(x='Log infected per 1m capita',y='Log dead per 1m capita')
 
 ## weighted
 p4 <- ggplot(data = df, aes(x = ln_conf_pc, y = ln_death_pc)) +
     geom_point(data = df, aes(size=population),  color = 'blue', shape = 16, alpha = 0.6,  show.legend=F) +
-    geom_smooth(aes(weight = population), method = "lm", color='red')
+    geom_smooth(aes(weight = population), method = "lm", color='red')+
+     labs(x='Log infected per 1m capita',y='Log dead per 1m capita')
 ```
+```{r, results = 'asis', echo = FALSE}
+texreg(list(reg1 , reg2 , reg3 , reg4), table = FALSE, use.packages = FALSE, float.pos = 'h')
 
-```{r fig 3, fig.width=8,fig.height=5, fig.cap='Comparing regression models for confirmed and died COVID-19 cases for 15th Oct, 2020', echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+
+```
+```{r fig 3, fig.width=8,fig.height=5, fig.cap='Scatter plots with regression models visualised for confirmed and died COVID-19 cases for 15th Oct, 2020', echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
 ggarrange(p1, p2, p3, p4,
-                    labels = c("A", "B", "C", "D"),
+                    labels = c("Model1", "Model2", "Model3", "Model4"),
                     ncol = 2, nrow = 2)
 ```
 
-```{r, echo = FALSE}
 
-## can be used for html only
-library(texreg)
-screenreg(list(reg1,reg2,reg3,reg4))
-
-
-```
