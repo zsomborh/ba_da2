@@ -1,14 +1,12 @@
 ---
-title: "Assignment 1"
+title: "Assignment 1 - Data analysis 2"
 author: "Zsombor Hegedus"
-date: '2020 november 25 '
+date: '2020 november 29'
 output:
   pdf_document:
     #toc: false
     highlight: zenburn
-  #html_document:
-    #toc: true
-    #theme: united
+
 ---
 
 ```{r setup, include=FALSE}
@@ -29,9 +27,9 @@ library(ggthemes)
 #library(ggcorrplot)
 
 data_in <- "C:/Users/T450s/Desktop/programming/git/ba_da2/Assignment_1/data/clean/"
-df <- read_csv(paste0(data_in,"covid_pop_20201015_clean.csv"))
+df <- read_csv(paste0(data_in,"covid_pop_20201005_clean.csv"))
 ```
-# Introduction
+# Introduction #
 
 In this analysis my focus is uncovering a pattern of association between the number of confirmed COVID-19 cases and the number of deaths caused by the virus.
 In this analysis I will use admin data, where variables, such as the number of deceased and infected people are from the [github repo](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_daily_reports) of Johns Hopkins University, and population data is collected from World Development Indicators maintained by the World Bank. The population of the analysis covers every country where such data was available (each country is one observation in my dataset), while the sample used for the analysis is narrowed to one date - the 15th of Oct, 2020. Potential data quality issues could arose from the fact that: 
@@ -39,7 +37,7 @@ In this analysis I will use admin data, where variables, such as the number of d
 * Joining the two dataframes required entity resolution which is a manual process that always leaves room for data quality errors
 * There might be a bias in how countries collected or disclosed their information (e.g. some countries might not conduct enough tests hence the number of confirmed cases are low - or they might be using different criterion to indentify a COVID-19 death case)
  
-After entity resolution, I ended up with 168 observations in my data, where I dropped out observations with zero reported death cases since I did ln transformation where records with zero deaths could not have been used. I used *per capita* variables so divided deaths and confirmed cases by the population - expressed in millions - of given country. My dependent variable $y$ was the number of deaths per capita caused by COVID-19 and my explanatory variable $x$ was the number of confirmed cases per capita in relation with the disease.
+After entity resolution, I ended up with 168 observations in my data, where I dropped out observations with zero reported death cases since I did ln transformation where records with zero deaths could not have been used. I used *per capita* variables so divided deaths and confirmed cases by the population - expressed in millions - of given country. My dependent variable $y$ was the number of deaths per one million capita caused by COVID-19 and my explanatory variable $x$ was the number of confirmed cases per one million capita in relation with the disease.
 
 ```{r summary, include=FALSE}
 df <- df %>%
@@ -99,7 +97,7 @@ ggarrange(p1, p2, nrow = 1 )
 print(xtb, comment=FALSE, include.rownames=FALSE)
 ```
 
-# EDA 
+# EDA #
 
 Figure 1 shows the distribution of variables which is skewed with a fat right tail and a few extreme values for both. The number of confirmed cases (visible in Table 1) far exceed the deaths - in my sample, ca.2.4% of the people that contracted COVID-19 died from the disease. Since the density plots resemble a lognormal distribution, it  indicates that ln transformations for both variables might strengthen the results of the analysis.
 
@@ -107,10 +105,11 @@ A substantive reason for choosing log-log model is that my variables are affecte
 
 Statistical reasons for choosing ln-ln transformation is that:
 
-* the distributions of both variables are skewed with a long right tail which resemples a log-normal distirbution 
+* the distributions of both variables are skewed with a long right tail which resembles a log-normal distirbution 
 * comparing scatter plots with and without ln transformation resulted in a much better fit for the model (R^2^ was about twice as good)
+* Visual inspection of the scaterplots with lowess (available in the Appendix) also indicated that log-log transformation shows a clearer pattern.  
 
-# Model Choice 
+# Model Choice #
 
 For the analysis I chose a simple linear regression between the log transformed y and x variables: 
 
@@ -148,7 +147,7 @@ xtb <- xtable(tab,type = "latex", caption = "Hypothesis testing for the slope of
 print(xtb,comment = FALSE, include.rownames = FALSE)
 ```
 \newpage
-# Analysing residuals 
+# Analysing residuals #
 
 Table 4 summarises the countries where my model projected $\hat{y}$ with the lowest negative errors. In these countries less people died than what the model implied. A number of reasons can explain the low number of deaths compared to the amount of confirmed cases. Some of these countries are very wealthy, so healthcare might be operating on a higher standard than in other countries. On the other hand it can also be that the density of population in given country is low, so that people don't interact and meet with others so much.
 
@@ -170,13 +169,13 @@ top5<- df %>% top_n( 5 , reg1_res ) %>%
 xtb <- xtable(top5,type = "latex", caption = "5 Countries with the biggest negative residuals")
 print(xtb,comment = FALSE, include.rownames = FALSE)
 ```
-# Executive summary (3-5 sentences)
+# Executive summary #
 
-I set out to analyse the pattern of association between the number of confirmed COVID cases and the number of deaths caused by COVID-19 in all countries where this data is available. I used log-log transformation and scaled the number of confirmed and fallen people by the population of each country to arrive to 'per capita' variables. I used regression analysis to uncover these tendencies, and found in my sample for the 15th Oct, 2020 that there is a positive association between the two variables. The main message my model wish to convey is that understanding the number of people contracted by the virus is crucially important for governments, so that they can have an expectation as to how many people might die due to the disease. On the one hand my results could have been strengthened by including more variables such as  the age of people (or a categorical variable representing age groups) to see whether the virus is deadlier for the older population. My results, on the other hand could have been weakend by using level instead of log variables, as it was quite apparent in the EDA phase that without ln transformation my R squared would have dropped approximately to the third of what I was able to achieve with my final model. 
+I set out to analyse the pattern of association between the number of confirmed COVID cases and the number of deaths caused by COVID-19 in all countries where this data is available. I used log-log transformation and scaled the number of confirmed and fallen people by the population of each country to arrive to 'per capita' variables. I used regression analysis to uncover these tendencies, and found in my sample for the 15th Oct, 2020 that there is a positive association between the two variables. The main message my model wishes to convey is that understanding the number of people contracted by the virus is crucially important for governments, so that they can have an expectation as to how many people might die due to the disease. On the one hand my results could have been strengthened by including more variables such as  the age of people (or a categorical variable representing age groups) to see whether the virus is deadlier for the older population. My results, on the other hand could have been weakend by using level instead of log variables, as it was quite apparent in the EDA phase that without ln transformation my R^2^ would have dropped approximately to the half of what I was able to achieve with my final model. 
 
-# Appendix
+# Appendix #
 
-### Transforming variables
+### Transforming variables ###
 
 The below is to show why log-log model was the best choice when deciding on transformation of variables. 
 ```{r fig 2, fig.width=8,fig.height=2.6, fig.cap='Scatter plots between deaths and confirmed cases in relation to COVID-19 for the examined countries on 15th Oct, 2020 - lowess functions', echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
@@ -205,19 +204,15 @@ ggarrange(p1, p2,p3, nrow = 1 )
 
 ```
 
-### Model Comparison and model choice
+### Model Comparison and model choice ###
 
 The below table and scatter plots serve as summary for four regression models that I run in order to uncover the pattern of association between my log transformed $x$ and $y$ variables. The models were ther following:
 
 * **Model 1** - simple linear regression
 * **Model 2** - a quadratic regression
-* **Model 3** - piecewise linear spline with two cutoffs that I determined looking at the lowess function which is also visible in Figure 2
+* **Model 3** - piecewise linear spline with two cutoffs that I determined by looking at the lowess function which is also visible in Figure 2
 * **Model 4** - weighted regression where the weight was the population of a country
-
-All  the above models estimated a positive trend in our sample indicating that the number of death per 1 million capita is higher for higher number of confirmed cases per 1m capita. All models showed a very good fit, with R^2^ being 0.79 in the first 3 models and 0.9 for the last one. In Model 4 we can see that countries with bigger population (indicated with bigger size for the dots) are very close to the trend line, which is probably the reason why the fit was much better. However weighting is not really sensible, since we already examine per capita variables. The estimated slope parameters were significant at 5% in every case, except the squared parameter for the quadratic case. We can aslo see from the scatter plots that the relationship is closer to linear, than non-linear, so probably not even higher order polynomials would provide a much better fit. From the looks of it, the dot's are also spread around the estimated $\hat{y}$ variables in a quite symmetric, seemingly homoskedastic manner.   
-
-For my analysis I chose  **Model 1**, the simple linear regression. The pattern of association in the data clearly indicates a linear relationship between the log number of confirmed cases per 1m capita and log deaths per 1m capita. This linear pattern is also understood between virologist and other experts - if someone contracts this disease, there is a possibility that it kills them, so the more people are infected, the more deaths a country can expect to happen. In addition to that, regression estimates in the simple case are the easiest to translate.     
-
+\
 ```{r regression_codes, include = FALSE}
 
 ## adding quadratic variable
@@ -266,10 +261,13 @@ texreg(list(reg1 , reg2 , reg3 , reg4), table = FALSE, use.packages = FALSE, flo
 
 
 ```
+
+All  the above models estimated a positive trend in our sample indicating that the log number of death per 1 million capita is higher for higher log number of confirmed cases per 1m capita. All models showed a very good fit, with R^2^ being 0.79 in the first 3 models and 0.9 for the last one. In Model 4 we can see that countries with bigger population (indicated with bigger size for the dots) are very close to the trend line, which is probably the reason why the fit was much better. However weighting is not really sensible, since we already examine per capita variables. The estimated slope parameters were significant at 5% in every case, except the squared parameter for the quadratic case. We can also see from the scatter plots that the relationship is closer to linear, than non-linear, so probably not even higher order polynomials would provide a much better fit. From the looks of it, the dots are also spread around the estimated $\hat{y}$ variables in a quite symmetric, seemingly homoskedastic manner.   
+
 ```{r fig 3, fig.width=8,fig.height=5, fig.cap='Scatter plots with regression models visualised for confirmed and died COVID-19 cases for 15th Oct, 2020', echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
 ggarrange(p1, p2, p3, p4,
                     labels = c("Model1", "Model2", "Model3", "Model4"),
                     ncol = 2, nrow = 2)
 ```
 
-
+For my analysis I chose  **Model 1**, the simple linear regression. The pattern of association in the data clearly indicates a linear relationship between the log number of confirmed cases per 1m capita and log deaths per 1m capita. This linear pattern is also understood between virologist and other experts - if someone contracts this disease, there is a possibility that it kills them. In addition to that, regression estimates in the simple case are the easiest to translate.     

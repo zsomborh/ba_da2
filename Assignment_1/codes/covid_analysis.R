@@ -10,7 +10,7 @@ library(car)
 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
-df<- read_csv('../data/clean/covid_pop_20201015_clean.csv')
+df<- read_csv('../data/clean/covid_pop_20201005_clean.csv')
 
 
 # EDA ---------------------------------------------------------------------
@@ -124,17 +124,17 @@ htmlreg( list(reg1 , reg2 , reg3 , reg4),
 # Prediction errors -------------------------------------------------------
 
 # Get the predicted y values from the model
-df$reg4_y_pred <- reg4$fitted.values
+df$reg1_y_pred <- reg1$fitted.values
 # Calculate the errors of the model
-df$reg4_res <- df$ln_death_pc - df$reg4_y_pred 
+df$reg1_res <- df$ln_death_pc - df$reg1_y_pred 
 
 # Find countries with largest negative errors
-df %>% top_n( -5 , reg4_res ) %>% 
-    select( country , ln_death_pc , reg4_y_pred , reg4_res )
+df %>% top_n( -5 , reg1_res ) %>% 
+    select( country , ln_death_pc , reg1_y_pred , reg1_res )
 
 # Find countries with largest positive errors
-df %>% top_n( 5 , reg4_res ) %>% 
-    select( country , ln_death_pc , reg4_y_pred , reg4_res )
+df %>% top_n( 5 , reg1_res ) %>% 
+    select( country , ln_death_pc , reg1_y_pred , reg1_res )
 
 
 
@@ -156,3 +156,9 @@ tab <-  tab %>%
         p.value = p.value,
         conf.low = conf.low,
         conf.high = conf.high)
+
+
+dataf <- reg1
+
+texreg(list(reg1 , reg2 , reg3 , reg4), table = FALSE, use.packages = FALSE, caption = 'Something about covid')
+

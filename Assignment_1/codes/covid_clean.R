@@ -39,7 +39,7 @@ df_population <-
 # Let's continue with covid data ------------------------------------------
 
 ## First we load the data
-df_covid <- read_csv( "../data/raw/covid_20201015_raw.csv" )
+df_covid <- read_csv( "../data/raw/covid_20201005_raw.csv" )
 
 ## I do 3 things: 1) group by country 2) sum records that appera multiple
 ## times for a given country - since they were broken out to regions and 3) 
@@ -115,4 +115,4 @@ final_df <- joined_df %>%  filter(
 sum(complete.cases(final_df)) == nrow(final_df)
 ## No NAs left
 
-write_csv(final_df, '../data/clean/covid_pop_20201015_clean.csv')
+write_csv(final_df, '../data/clean/covid_pop_20201005_clean.csv')

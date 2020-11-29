@@ -18,5 +18,5 @@ population_data <- WDI(indicator=c('SP.POP.TOTL'),
 
 
 #finally, writing out raw files to github
-write_csv(covid_data, '../data/raw/covid_20201015_raw.csv')
+write_csv(covid_data, '../data/raw/covid_20201005_raw.csv')
 write_csv(population_data, '../data/raw/population_2019_raw.csv')

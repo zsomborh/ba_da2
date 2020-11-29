@@ -3,3 +3,5 @@ The data is collected from World Development Indicators maintained by World Bank
 The collected data contains countries:
  - with their population measure
  - The number of confirmed cases, deaths, active cases in relation to COVID-19
+ 
+ See more in the subfolders' variable.xlsx.
