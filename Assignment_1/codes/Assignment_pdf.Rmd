@@ -15,6 +15,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r pack_n_load, include=FALSE}
+
+#loading packages required for analysis
 library(tidyverse)
 library(moments)
 library(xtable)
@@ -24,7 +26,7 @@ library(lspline)
 library(estimatr)
 library(texreg)
 library(ggthemes)
-#library(ggcorrplot)
+
 
 data_in <- "C:/Users/T450s/Desktop/programming/git/ba_da2/Assignment_1/data/clean/"
 df <- read_csv(paste0(data_in,"covid_pop_20201005_clean.csv"))
@@ -40,6 +42,8 @@ In this analysis I will use admin data, where variables, such as the number of d
 After entity resolution, I ended up with 168 observations in my data, where I dropped out observations with zero reported death cases since I did ln transformation where records with zero deaths could not have been used. I used *per capita* variables so divided deaths and confirmed cases by the population - expressed in millions - of given country. My dependent variable $y$ was the number of deaths per one million capita caused by COVID-19 and my explanatory variable $x$ was the number of confirmed cases per one million capita in relation with the disease.
 
 ```{r summary, include=FALSE}
+
+## Creating variables for further analysis
 df <- df %>%
     filter(deaths != 0) %>% 
     mutate(
@@ -49,6 +53,9 @@ df <- df %>%
         ln_conf_pc = log( conf_pc ),
         ln_death_pc = log( death_pc ) 
     )
+
+
+## Create summary statistics for my variables and putting it to xtable
 
 death_pc_sum <- df %>% summarise(
     variable = 'Death per capita',
@@ -78,6 +85,7 @@ xtb <- xtable(df_summary,type = "latex", caption = "Summary statistics of examin
 ```
 
 ```{r histograms_code, include = FALSE}
+#plotting the distribution of variables
 p1<- ggplot( df , aes( x = death_pc ) ) +
     geom_histogram( aes(y = ..density..) , alpha = 1, binwidth = 50, color = 'black', fill = 'white') +
     geom_density( aes(y = ..density..) , alpha = .2 , bw = 50, color = 'black', fill="#FF6666") +
@@ -123,6 +131,7 @@ $$ H_{0}: \beta = 0,~~ H_{A}:\beta \neq 0 $$
 The below table shows the result of the hypothesis test which resulted in a 95% CI of [0.84, 1.02], which means that I can reject the $H_{0}$ with 95% confidence. The overall conclusion is that $\beta$ is significant in the level that I was interested in (even more, as we can see from the p value), therefore there is a positive pattern of association between the variables subject to my analysis.
 
 ```{r, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+#run chosen regression model - which is a linear regression
 reg1 <- lm_robust( ln_death_pc ~ ln_conf_pc , data = df , se_type = "HC2" )
 
 tab<- tidy(reg1)
