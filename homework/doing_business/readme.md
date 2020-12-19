@@ -1,0 +1,1 @@
+This folder contains the solution for homeworks exercises for Data Analysis 2. Chapter 8, exercise 4

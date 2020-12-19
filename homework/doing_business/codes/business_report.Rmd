@@ -1,0 +1,199 @@
+---
+title: "Analsying ease of doing business and GDP "
+author: "Zsombor Hegedus"
+date: '2020 december 18 '
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Execuitve summary
+
+In this paper I am going to examine the pattern of association between the time required to start a business and the income a country generates. In order to analyse the link between these two variables, I used OLS regressions on data downloaded from WDI in the year 2019. My results show that there is a negative pattern of association between the variables, and in my data GDP per capita is expected to be 0.25 lower for every observation where the time required to start a business was one day longer. Starting a business can be a complex and bureaucratic process, but as my results imply it is beneficial for governments to strive for creating an environment that nurtures small businesses instead of making it harder for them to enter their respective markets.
+
+The analysis was done as homework for chapter 8 exercise 4 - files for the current analysis are stored in this [github repo]('https://github.com/zsomborh/ba_da2/tree/main/homework/doing_business')
+
+## Introduction 
+
+I am going to analyise the relationship between the days needed to start a business and the GDP per capita ratio of a given country (the GDP per capita ratio is based on purchasing power parity and expressed in international dollars - for the sake of simplicity I will just refer to this as GDP per capita going forward). My assumption is that if there are hard limits for a small company to enter a market, it will negatively impact the economy. I believe this to be the case because if the market is dominated by a couple of big players only, the level of competition will be low. The more parties will bring forward price competition which is good for the consumers, and it also incentivises companies to come up with new innovative ideas, to reduce their costs or improve their products. In such an environment, the parties that stand out, might decide to expand internationally increasing the global competititveness of the country. To prove my theory, and to quantify this assumed impact, I will use linear regression models on 2019 data for all countries, downloaded from the Wold Development Indicators database. 
+
+First of all, the two variables that I'm going to examine are *gdppc* (GDP per capita) and *time2business* (time required to start a business). Unfortunately data was not available for all countries but in the end I still ended up with  178 observations, where each observation is a country. Some summary statistics can be seen in Table 1 and the distribution of the variables are also visualised in Figure 1.
+
+```{r pack_n_load, include=FALSE}
+
+#loading packages required for analysis
+library(tidyverse)
+library(moments)
+library(xtable)
+library(ggpubr)
+require(scales)
+library(lspline)
+library(estimatr)
+library(texreg)
+library(ggthemes)
+
+my_url <- "https://raw.githubusercontent.com/zsomborh/ba_da2/main/homework/doing_business/data/clean/time2business_clean.csv"
+df <- read_csv( my_url )
+
+```
+
+```{r summary, include=FALSE}
+gdppc_df <- df %>% summarise(
+    variable = 'GDP per capita',
+    mean     = round(mean(gdppc),2),
+    median   = round(median(gdppc),2),
+    std      = round(sd(gdppc),2),
+    iq_range = round(IQR(gdppc),2), 
+    min      = round(min(gdppc),2),
+    max      = round(max(gdppc),2),
+    skew     = round(skewness(gdppc),2),
+    numObs   = sum( !is.na( gdppc ) ) )
+
+time2business_df <- df %>% summarise(
+    variable = 'Days needed to start business',
+    mean     = round(mean(time2business),2),
+    median   = round(median(time2business),2),
+    std      = round(sd(time2business),2),
+    iq_range = round(IQR(time2business, na.rm= TRUE),2), 
+    min      = round(min(time2business),2),
+    max      = round(max(time2business),2),
+    skew     = round(skewness(time2business),2),
+    numObs   = sum( !is.na( time2business ) ) )
+
+df_summary <- gdppc_df %>% add_row( time2business_df ) 
+xtb <- xtable(df_summary,type = "latex", caption = "Summary statistics of examined variables")
+
+p1<- ggplot( df , aes( x = gdppc ) ) +
+    geom_density( aes(y = ..density..) , alpha = 1 , bw = 5, color = 'black' , fill="#FF6666") +
+    labs(x='GDP per capita, 2019',y='Density') + ylim (0,0.045) + theme_bw()
+
+p2<- ggplot( df , aes( x = time2business ) ) +
+    geom_density( aes(y = ..density..) , alpha = 1 , bw = 5, color = 'black', fill="#56B4E9") +
+    labs(x='Time to start business, 2019',y='Density') + ylim (0,0.045) + theme_bw() + ylab(NULL)
+
+```
+
+```{r, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+print(xtb, comment=FALSE, include.rownames=FALSE)
+```
+
+```{r fig 1, fig.width=8,fig.height=2.2, fig.cap='Distribution of days needed to start a business and GDP per capita for examined countries 2019', echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+ggarrange(p1, p2, nrow = 1 )
+```
+
+We can see that both variables are skewed with a long right tail. I treat both as ratio variables, altough one could argue that when we talk about days to start a new business, we rather do comparison on the absolute differences and not in relative terms (e.g. in country A, it takes 2 more days to start a business than in country B). The mean GDP per capita was at 20.66, with a few extreme values such as the GDP per capita of  the Luxemburg and Singapore, but naturally I kept all observations as they are valid records. When looking at time to start a business (methodology on how data was collected is available in this [link](https://www.doingbusiness.org/)), it was apparent that most of my observations are concentrated between 0 and 30 days with mean being ca.18 days, but a non-negligible amount of countries had higher values than that with one ultimately high value of 153 days that belonged to Laos PDR. Since I'm looking for an average association in the data, and since I have no means to prove that this value is incorrect I decided not to exclude this from my population. But it is worth to note that this is an influential variable that has a relatively big impact on every slope coefficient that I have, so it might be worth investigating this further (with two other observations that have close to 100 days).  
+
+```{r scatterplots, include=FALSE}
+df <- df %>%  mutate(
+    gdppc_ln = log(gdppc),
+    t2b_ln = log(time2business)
+    
+)
+
+
+
+p1<- ggplot(df, aes(x = time2business, y= gdppc)) + 
+    geom_point() + 
+    geom_smooth(method="loess") +
+    labs(x='Days required to start business',y='GDP per capita')+ 
+    theme_bw()
+
+p2<- ggplot( df , aes(x = time2business, y =gdppc )) +
+    geom_point() +
+    geom_smooth(method="loess") +
+    scale_x_continuous( trans = log_trans(), breaks = c(1,3,25,70,140)) +
+    labs(x='Days required to start business (ln scale)',y='GDP per capita')+ 
+    theme_bw()
+
+p3<- ggplot( df , aes(x = time2business, y =gdppc )) +
+    geom_point() +
+    geom_smooth(method="loess")+
+    scale_y_continuous( trans = log_trans(), breaks = c(1,3,7,20,55))+
+    labs(x='Days required to start business',y='GDP per capita (ln scale)')+
+    theme_bw()#,  breaks = c(10,50,200,1000,10000) )+
+    #labs(x='Infected per 1m capita (ln scale)',y='Dead per 1m capita')
+
+p4<- ggplot( df , aes(x = time2business, y =gdppc )) +
+    geom_point() +
+    geom_smooth(method="loess")+
+    scale_x_continuous( trans = log_trans(), breaks = c(1,3,25,70,140)) +#,  breaks = c(10,50,200,1000,10000) )+
+    scale_y_continuous( trans = log_trans(), breaks = c(1,3,7,20,55))+
+    labs(x='Days required to start business (ln scale)',y='GDP per capita (ln scale)')+
+    theme_bw()#, breaks = c(1,20,400) )+
+    #labs(x='Infected per 1m capita (ln scale)',y='Dead per 1m capita (ln scale)')
+
+```
+## Regression analysis
+
+To get an understanding on the relationship between my variables I created four scatter plots with a lowess function that can be seen in Figure 2. The first scatter plot in the top left shows the level-level case, which is the two variables without any transformation. We can see two very important phenomena (1) there is a substantial impact coming from the influential variables and (2) the lowess shows that the association is non-linear. Since I have ratio variables, I also visualised three other scenarios, where I used log transformation (log-level, level-log, log-log case). In my view the most interesting results are from the log-log case, where we can see that the lowess almost shows a linear trend in the data.   
+
+```{r fig 2, fig.width=8,fig.height=3.7, fig.cap='Relationship between days needed to start a business and GDP per capita for examined countries in 4 different ways 2019', echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+ggarrange(p1, p2,p3,p4, nrow = 2, ncol = 2 )
+```
+
+\newpage
+
+Based on these findings I thought that it is best I transform the variables. When it comes to the left hand side cariable, GDP per capita, since it is a ratio variable with a distribution with a long right tail, I decided to take it's natural logarithm. For the $x$ which is a variable with similar characteristics to $y$, in order to capture the non-linear, I decided to experiment to improve the fit of the baseline, level-level case:
+
+1. I take it's natural logarithm as well
+2. I use it's quadratic form
+3. I use a piecewise linear spline model, since it was quite interesting to see from the lowess, that the pattern is the steepest between days 0 and 10, and then the slope changed slightly again after day 50. I one knots on day 10, since when I experimented with multiple knots I couldn't say with 95% confidence that they were not the same.
+
+These experiments can be seen in Figure 3.
+
+``` {r regressions_viz, include = FALSE }
+cutoff <- c(10)
+
+p1<- ggplot(df, aes(x = time2business, y= gdppc)) + geom_point() + 
+    labs(x='Days required to start business', y= 'GDP per capita')+
+    geom_smooth(method=lm) +theme_bw()
+
+p2<- ggplot(df, aes(x = t2b_ln, y= gdppc_ln)) + geom_point() + 
+    labs(x='Log number of days needed to start business', y= 'Log GDP per capita')+
+    geom_smooth(method = lm, color = 'red') +theme_bw()
+p3<- ggplot(df, aes(x = time2business, y= gdppc_ln)) + geom_point() +
+    labs(x='Days required to start business quadratic', y= 'Log GDP per capita') +
+    geom_smooth( formula = y ~ poly(x,2) , method = lm , color = 'orange') +theme_bw()
+p4<- ggplot(df, aes(x = time2business, y= gdppc_ln)) + geom_point() +
+    labs(x='Days required to start business (PLS)', y= 'Log GDP per capita')+
+    geom_smooth( formula = y ~ lspline( x , cutoff ), method = lm , color = 'lightgreen') +theme_bw()
+```
+
+```{r fig 3, fig.width=8,fig.height=6, fig.cap='Regression models visualised for days needed to start a business vs GDP per capita for examined countries in 4 different ways 2019', echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+ggarrange(p1, p2,p3,p4, nrow = 2, ncol = 2 )
+```
+
+```{r regression, include = FALSE}
+df <- df %>%  mutate(
+    t2b_sq = time2business **2
+)
+
+reg1 <- lm_robust( gdppc ~ time2business , data = df )
+reg2 <- lm_robust( gdppc_ln ~ time2business , data = df )
+reg3<-  lm_robust( gdppc_ln ~ time2business +t2b_sq, data = df )
+reg4 <- lm_robust(gdppc_ln ~ lspline( time2business , cutoff ), data = df )
+reg5 <- lm_robust(gdppc_ln ~ time2business, data = df , weights = population)
+
+```
+
+We can see all regression lines capturing the non-linearity, so deciding between them is going to come down to inspecting their fit. In order to do so I look at the R^2^ for each case and see how much of the variation of $y$ is explained by the above models. I used the simple level-level regression as a base case and see how much I can improve this with the rest of the models. I also added an extra model, a weighted regression, to check if it makes a difference if we use population weights. The below model summary shows these results:
+
+```{r, results = 'asis', tab.cap = 'Table 2: Summary staistics', echo = FALSE}
+texreg(list(reg1 , reg2 , reg3 , reg4, reg5), table = FALSE, use.packages = FALSE, float.pos = 'h',
+       custom.model.names = c('level-level','log-log', 'quadratic', 'PLS','weighted'),
+       caption='Table 2: Summary of regressions models')
+```
+
+It can be seen from the above that all of the models have a pretty weak fit ranging from 4%-10%, so the model is not performing particularly well when explaining the variation in $y$. From the 5 models, the weighted regression does the best job, but I wouldn't say it makes sense to use it as GDP per capita variable which is already normalised by the population of a country. The log-log case has the worst fit, so log transformation didn't really improve the model, and neither did the quadratic form. However there is a little improvement coming from the PLS model, with results that are also interesting to look at, so I would say that the two best models from the lot are the level-level and the PLS.
+
+**The level-level case:** This model states that we can expect the GDP per capita variable to be 0.25 units lower when time to start business is 1 day longer. To be more precise with a one day longer time to start a business with 95% confidence we can say that the unit by which gdp pc is expected to be lower is between 0.41 and 0.09. The intercept coefficient was also significant at 5%, which basically means that we can expect GDP per capita measure to be at 25.18 in case a business can be started instantly, without any waiting time. 
+
+**PLS:** In my view the findings in the PLS are noteworthy because they highlight an interesting behaviour in our data - the regression line is significantly steeper for observations *time2business* is between 0 and 10 days. I can say that it is significantly steeper, because  95% CIs are not overlapping between $\beta_{1}$ and $\beta_{2}$ for the regression lines that are separated by the knots. The interpretation for $\beta_{1}$ is important here: for observations where *time2business* was below 10 days, we can expect GDP per capita to be 10% lower for observations having 1 day longer time to start a business. This is also significant at 5%.
+
+Even though none of the models proved to have a good fit in the data, all of them showed a slope with significant negative impact at 5%. Subsetting the population by groups with similar geographical location, or economic structure might improve how we can analyse these patterns, but the above is already indicative that it is in the best interest of any country to reduce the number of days to start a business in order to achieve a higher economic output.
+
+## Summary
+
+In this paper I analyised the pattern of association between times required to start a business and GDP per capita. My intuition was that there exist a negative relationship between this two - with more days required to start a business we can expect a country's generated income to be lower. I downloaded GDP per capita and time required to start a business variables from 2019 from the World Bank's database. I ran linear regression models with a few transformations in variables to accomodate the non linear patterns in my data. None of my models provided a good fit but all of them implied a significantly negative slope between the two variables. One of the models I used was a PLS that implied that the behaviour of countries where *time2business* was below 10 days was diffenert. Overall the main message of this paper is to highlight that it is worth considering for governments to improve their processes with regards to the foundation of companies.
