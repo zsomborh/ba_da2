@@ -1,0 +1,462 @@
+---
+title: "DA2/Assignment 2 - Analysing a bank telemarketing campaign"
+author: "Zsombor Hegedus"
+date: '2020 november 29'
+abstract: |
+    This paper introduces regression models to uncover a pattern of association between the success of a telemarketing campaign and information known about clients. The data used holds information of a telemarketing campaign of a Portuguese bank that was collected between May 2008 to November 2010. LPM, logit and probit models were used to analyse events with a binary outcome which indicates whether given client subscribed to a term deposit as a result of the campaign or not. A probit model using various demographic, macro and campaign related variables proved to be the best choice to uncover the patterns. 
+
+output:
+  pdf_document:
+    #toc: false
+    highlight: zenburn
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r pack_n_load, include=FALSE}
+load.libraries <- 
+    c('data.table',
+      'testthat',
+      'gridExtra',
+      'corrplot',
+      'GGally',
+      'tidyverse',
+      'e1071',
+      'viridis',
+      'stargazer',
+      'ggpubr',
+      'estimatr',
+      'mfx',
+      'margins',
+      'pscl',
+      'modelsummary',
+      'caret',
+      'DescTools', 
+      'xtable', 
+      'texreg')
+
+install.lib <- load.libraries[!load.libraries %in% installed.packages()]
+
+for(libs in install.lib) install.packages(libs, dependences = TRUE)
+
+#load and check if all is loaded
+sapply(load.libraries, require, character = TRUE)
+
+# source sum_stat function
+source('https://raw.githubusercontent.com/CEU-Economics-and-Business/ECBS-5208-Coding-1-Business-Analytics/master/Class_10/codes/sum_stat.R')
+
+df <- read_csv('https://raw.githubusercontent.com/zsomborh/ba_da2/main/Assignment_2/data/clean/bankmarketing_clean.csv')
+
+# Create quanty and qualy dfs
+quanty_cols <- c('age', 'duration', 'campaign', 'previous', 'emp.var.rate',
+                 'cons.price.idx', 'cons.conf.idx', 'euribor3m', 'nr.employed')
+
+qualy_cols<-  names(df) %in% quanty_cols
+quanty_cols <- c(quanty_cols, 'output')
+
+quant_df <- df[,quanty_cols]
+qual_df <- df[!qualy_cols]
+
+# adding extra variables for further analysis
+df<- df %>%  mutate(
+    age_sq  = age **2,
+    duration_sq = duration **2,
+    campaign_ln = log(campaign)
+)
+```
+
+
+
+## Introduction ## 
+I once read that personal finances can be considered as one of the most intimate of areas that can make people very insecure. When something is considered as such, it can often happen that one sweeps it under the rug and don’t pay that much attention as to e.g. what do they do with their savings? Some might just declare themselves unable to understand the complex world of finance and withdraw their salary in cash so that they can put it in a pillow. But that might not be the best way of handling wealth.
+Risk-free investment options exist in the market that can yield considerable interest while banks are also in need of money from their consumers. 
+One of the safest means for a bank to get liquidty is by increasing client deposits. A term-deposit for example is a fixed term investment in which a customer entrusts the banks to use their cash for a given period of time in exchange for some interest. In order to break the silos and incentivise people to give them cash, banks can use direct marketing in which they introduce options to clients so that they can generate income by investing their wealth in safe instruments.
+
+In this paper I look at the pattern of association between the success of a telemarketing campaign and information available from the clients using regression models. Predicting the outcome of a campaign has been thoroughly analysed by Moro et al. (2014) while my focus is getting a better understanding in the connection between the variables used. Understanding these relationships could help marketing managers better plan their campaigns and target their clients effectively, thus saving on costs.
+
+
+## Data ##
+I used *Bank Telemarketing *, a publicly available dataset with 41,188 records in which each observation is a call between the employees of a Portuguese bank and their clients. This is observational data that was collected between May 2008 and November 2010. The data has a binary variable which shows whether given client subscribed to a term loan at the bank as a result of the campaign. This is going to be the dependent variable in the analysis and takes the value of 1, in case the client subscribed to term deposit. For explanatory variables I defined 5 main categories , which are the following: 
+
+-	**Demographic information about clients** - such as age, marital status, job, education
+-	**Financial information of clients** - whether the client had personal loan, housing loan, or any defaulted credit
+-	**Campaign related information** - how the client was contacted, duration of the call, number of contacts performed in current and last campaign, outcome of previous marketing campaign
+-	**Time variables** - in which season was the client contacted
+-	**Macroeconomic variables** - such as the number of employees in the bank, the 3 month Euribor rate, consumer price index and employment variation rate  
+
+In order to improve data quality, I cleaned this dataset. I first removed duplicates and missing values that were encoded with either the number 999 or with  a string *unknown* - I decided not to use imputation techniques as my dataset was already large enough.I wanted to reduce the complexity of my dataset, and dropped unused variables/reduce the number of categories in the categorical variables. In this spirit, I dropped the variable showing whether the customer had defaulted credit, and the number of days before client was last contacted, as they had almost no variation (more than 95% of the values were the same).I also reduced the number of categories for *education* - the variable now only shows whether someone had university or equivalent level of education. I also transformed month variable into seasons, to have less categories. The cleaned dataset has 38,234 observations. 
+
+Only around 11% of all events ended up with a success in which the client subscribed to a term deposit. This can be seen visually in different breakdowns (filled histograms where color distinghises cases with success, where yellow is 1, which is) in the Appendix.  There aren’t any deviation in the data, the 10% success rate seems to be almost the same in every category, maybe except in the case of *duration*. Some summary statistics are also avaialable in Table 1: 
+
+```{r sum_stat, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+desc_stat <- sum_stat( quant_df , var_names = names(quant_df),
+                      stats = c('mean','median','min','max','sd') )
+                      
+xtb <- xtable(desc_stat,type = "latex", caption = "Summary statistics of quantitative variables")
+print(xtb, comment=FALSE, include.rownames=FALSE, scalebox='0.75')
+```
+
+## EDA ## 
+
+In the EDA phase my goal was twofold, and I only looked at the quantitative variables. On the one hand I wanted to see if the correlation between variables can give me a better understanding on my dataset, and if there are any highly correlated variables that I might not keep after all. On the other hand I wanted to see if there is any non-linearity between the explanatory variables and the dependent variable. 
+
+Correlations can be seen in Figure 2 in the Appendix. The correlation matrix shows that there is a very strong positive correlation between macroeconomic variables, which was not very surprising given that all of them have the same underlying driver - the strength of the local/European economy. It is worth to note that the data was recorded in the midst of a financial crises. In addition to that, these metrics were updated on a monthly, or quarterly basis, and kept flat throught the course of the period so high correlation is even less surprising. It could have been argued that leaving these highly correlated variables out is sensible, however I decided not to drop them as later on they were useful contributors and improved the model fit. We could also see that they are mildy negatively correlated with the dependent variable, called *output*.
+
+I also used a non-parametric regression model, **lowess** to see the relationship between some explanatory variables and the dependent variable. There were three interesting cases that can be seen in Figure 1. There is a non-linear relationship between *age* and the probability of success of a telemarketing campaign. The lowess resembles a quadratic function that has it's maximum at around age 45. There is a similar convex curve when using *duration* as explanatory variable. It seems that longer phone calls were associated with higher probabilities of success, which is quite intuitive, if people are not willing to consider subscribing, they wouldn't talk on the phone for too long. Lastly, *campaign* variable shows that after 15 tries, average probabilities for success were close to 0 which is also intutive - nobody likes to be harassed by their bank. 
+
+``` {r lowess_plots, include = FALSE}
+# Add lowesses
+lowess_plots <- function(data,var= 'age', xlab = 'Age') {
+    
+    temp_df <- data %>% 
+        group_by(data[,var],output) %>%  
+        mutate(weight = n()) %>% 
+        dplyr::select(var,output,weight) 
+    
+    ggplot(data = temp_df, aes_string(x=names(temp_df)[1], y='output')) +
+        geom_point(aes_string(x = names(temp_df)[1], 
+                              y = 'output', 
+                              size='weight'),
+                   color="gold", 
+                   shape = 16, 
+                   alpha=1, show.legend=F, 
+                   na.rm=TRUE)  +
+        geom_smooth(method="loess", color="purple", se = FALSE) +
+        scale_y_continuous(expand = c(0.05,0.05), limits = c(0,1), breaks = seq(0,1,0.1)) +
+        labs(x = xlab,y = "Probability of success") + theme_minimal()
+}
+
+p1 <- lowess_plots(df,'age','Age') 
+p2 <- lowess_plots(df,'duration','Duration')
+p3 <- lowess_plots(df,var = 'campaign','Number of contacts performed')
+```
+
+``` {r lowess_ggplots,fig.cap= 'Three lowess functions for age, duration and campaign variabls vs the dependent variable', fig.height= 4, echo = FALSE , results = "asis", warning = FALSE, message = FALSE } 
+ggarrange(p1,p2,p3,nrow = 1 )
+
+```
+
+## Model Choice ##
+
+My goal is to uncover the pattern of association between the success of a marketing campaign and information available about clients. Since I want to understand the probability of such an event happening, and since my dependent variable is binary, I decided to employ methods that can model probabilities. In this chapter first I use multiple linear probability models where I gradually introduce new sets of variables, to see whether it makes sense to add them or not. After deciding on the variables to include, I will use two more sophisticated models to overcome the shortcomings of LPM, the logit and the probit. 
+
+#### Experimenting with LPM ####
+
+My dataset is quite rich in both categorical and numerical variables, but perhaps I can drop some of them to reduce the complexity. This is a tradeoff that I am willing to take - if my ultimate goal was prediction, I might have included every variable, but in this case, I am fine to leave out some that might not improve the fit of the model, or that are not significant. I also used log transformation on *campaign* variable, and will use the second order polynomial of *age* and *duration*. Table 3 shows three models, where the first one has variables from the demographic category only, the second has every available variable included and in the third, I removed only the following variables as they were not significant and variable importance was also seemed very low: *weekdays, fin loan, housing, cons.conf.idx, campaign_ln, previous, marital*. 
+
+There is a great improvement in the model fit with the inclusion of more and more variables, however with that complexity also increases. Model summary with all sequential steps is available in my [github repo]('https://github.com/zsomborh/ba_coding2/tree/main/Assignment2/out'), under *lpms_comparison.html*. The last model's variables (later on referred to as *reduced model*) are the ones that I will use going forward as that is the simplest model, with a realtively good fit.
+
+
+
+#### Logit and Probit ####
+
+One of the shortcoming of LPM is that it can predict probabilities below 0 and above 1. In this case it was a significant issue, as almost 12k records were predicted with such unrealistic predictions. There are ways to overcome this one of them is to turn to logit and probit models. The difference between the predictions of LPM, logit and probit models in my data are visualised in the Appendix. 
+
+```{r logit_probit, include = FALSE }
+# Naive model - decide on what to include ---------------------------------
+
+demographic <-  c('age','age_sq','job','marital', 'high.ed')
+fin.state <- c('housing','loan')
+time<- c('day_of_week', 'season')
+campaign.specs <- c('contact','duration','previous','duration_sq','campaign_ln','poutcome')
+macro <- c('euribor3m','nr.employed','cons.price.idx', 'cons.conf.idx', 'emp.var.rate')
+
+
+
+#demographic only
+lpm1 <- lm( formula = output ~. , data=df[,c(demographic,'output')] )
+
+# demographic +financial
+lpm2 <- lm( formula = output ~. , data=df[,c(demographic,fin.state,'output')] )
+
+# demo + fin + time
+lpm3 <- lm( formula = output ~. , data=df[,c(demographic,fin.state,time,'output')] )
+
+# demo + fin + time + campaign
+lpm4 <- lm( formula = output ~. , data=df[,c(demographic,fin.state,time, campaign.specs, 'output')] )
+
+# demo + fin + time + campaign + macro
+lpm5 <- lm( formula = output ~. , data=df[,c(demographic,fin.state,time, campaign.specs, macro, 'output')] )
+
+#Reduced LPM
+# remove unused cols
+keep_vars <- c(demographic,fin.state,time, campaign.specs, macro, 'output') 
+remove_vars <- c('day_of_week', 'loan', 'housing', 'cons.conf.idx', 'previous', 'campaign_ln', 'marital' )
+keep_vars <- keep_vars[!keep_vars %in% remove_vars]
+
+lpm6 <- lm( formula = output ~. , data=df[,keep_vars] )
+
+#predictions
+df$lpm1_pred <- predict(lpm1)
+df$lpm5_pred <- predict(lpm5)
+df$lpm6_pred <- predict(lpm6)
+
+# first, logit
+logit <- glm( formula = output~. , data=df[,keep_vars], family=binomial(link="logit") )
+
+df$pred_logit <- predict.glm(logit, type="response")
+#logit_marg <- logitmfx( formula = output~. , data=df[,keep_vars], atmean=FALSE, robust = T)
+
+# second, probit
+
+probit <- glm( formula = output~. , data=df[,keep_vars], family=binomial(link="probit") )
+
+df$pred_probit <- predict.glm(probit, type="response")
+probit_marg <- probitmfx( formula = output~. , data=df[,keep_vars], atmean=FALSE, robust = T)
+
+
+```
+
+Choosing the final model came down to three options, the last LPM which had some dropped variables, logit and probit. In order to be able to make a choice between them I looked at model statistics that indicate how good a fit each model can provide. To do this I looked at the R^2^ and a pseudo R^2^ that can be used when evaulating logit and probit models. I also added a Brier score and checked if these variables had bias. These are available in Table 3 with the addition of a simple LPM included that has demographic variables only - to see the improvement. All models performed quite well, but the probit was a tiny bit more convincing (higher McFadden R^2^ and lower Brier score), that is why my model choice will be the **probit model**.
+
+```{r model_fits_prep, include = FALSE }
+
+# let's see baseline model that always predicts 0
+df$baseline <- rep(0,nrow(df))
+
+# create list of models and prediction col names
+models <- list(lpm1,lpm6,logit,probit)
+preds <- c('lpm1_pred','lpm6_pred','pred_logit','pred_probit')
+
+# create functoin to get all types of R squareds
+get_rsquared <- function(models, preds){
+    
+    R2 <- c()
+    R2_adjusted <- c()
+    McFadden<- c()
+    
+    model_rank <- c(paste0('model ',1:length(models)))
+    
+    i=1
+    
+    is.null(summary(models[[1]])$r.squared)
+    
+    
+    for(i in seq_along(models)){
+        #get R2
+        if (is.null(summary(models[[i]])$r.squared)) {
+            R2 <- c(R2,"NA")
+        } else{
+            R2 <- c(R2,summary(models[[i]])$r.squared)
+        }
+        #Get R2 adj
+        if (is.null(summary(models[[i]])$r.squared)) {
+            R2_adjusted <- c(R2_adjusted,"NA")
+        } else{
+            R2_adjusted <- c(R2_adjusted,summary(models[[i]])$adj.r.squared)
+        }
+        #R2_adjusted <- c(R2_adjusted, summary(models[[i]])$adj.r.squared )
+        McFadden <- c(McFadden,pR2(models[[i]])[['McFadden']])
+    }
+    
+    return(data.frame('Model rank' = model_rank, 'R2' =R2, 'R2 adjusted' = R2_adjusted, 'McFadden R2' = McFadden))
+}
+
+
+# Create function for calculating Brier score
+Brier_score <- function(data,var) {
+    Br_df <- (data[,var]-data[,'output'])**2
+    Br_score <- mean(Br_df[,var])
+    
+    return(Br_score)
+}
+
+# Create function for calculating Bias
+Bias<- function(data,var){
+    bias <- mean( data[,var][[1]] ) - mean( data[,'output'][[1]] )
+    return(bias)
+}
+
+# Create function that makes a summary table for model fit metrics 
+get_fit_df <- function(models,data,preds) {
+    brier = c()
+    for(pred in preds){brier <- c(brier,Brier_score(data, pred))}
+    
+    bias = c()
+    for(pred in preds){bias <- c(bias,Bias(data, pred))}
+    
+    fit_df <- get_rsquared(models)
+    fit_df <- cbind(fit_df,list('Brier score' = brier), list('Bias' = bias))
+    return(fit_df)
+}
+
+
+fit_df<- get_fit_df(models,df,preds)
+
+#small correction to remove mcfadden R2 for lpms
+
+fit_df[fit_df$Model.rank %in% c('model 1', 'model 2'), 'McFadden.R2'] <- NA
+fit_df <- fit_df %>% mutate(
+    R2  = round(as.numeric(R2),2),
+    R2.adjusted= round(as.numeric(R2.adjusted),2),
+    Model = c('Simple LPM', 'Reduced LPM', 'Logit', 'Probit'),
+    Model.rank = NULL
+)
+```
+
+```{r model_fits, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+fit_df <- fit_df[c(6,1,2,3,4,5)]                      
+xtb <- xtable(fit_df,type = "latex", caption = "Model fits")
+print(xtb, comment=FALSE, include.rownames=FALSE, scalebox='0.75')
+```
+
+
+## Robustness check ##
+ 
+To see how robust is the used probit model I used a calibration curve and also checked the accuracy of its predictions compared to a baseline model. Before going further it is important to note that the goal was not prediction, and when mentioning prediction in this document what I mean is model implied dependent variables on the whole dataset, and not predicted outputs of test subsets. The calibration curve can be seen in Figure 3 of the Appendix and it shows that the model predicted outputs are very close to the 45 degree line. This is what we expected, as we saw a very small bias for the probit model - it is now visually proven that this model is well calibrated. 
+
+I also checked the accuracy of my model, where accuracy here is defined as how many times did the prediction matched exactly the actual dependent variable. This is a naive approach, but one that is only used to get more comfort over using the probit model. The goal here for the model to outperform a baseline model, that is a prediction of 0 for every observation. These seemed a sensible baseline given the low proportion of successfull campaigns in the data (ca. 11%). And the probit beat the baseline as the accuracy of probit is: 91.23%, while the accuracy of baseline is: 88.87%, so with using the model we can improve 2.36 percentage points. This is a good improvement, but not a great one, and there would be room for improvement if the model was to be used for prediction. The confusion matrix in Figure 4 is also available to see the number of false positives and false negatives.
+
+## Results ##
+
+The below regression summary summarises the coefficient estimates (column = Model 1) for the probit model and I also included the transformed marginal differences for easy interpretation (column = Model 2). I will evaluate coefficients with 5% significance:
+
+```{r summary_probit, tab.cap = 'Table 2: Probit model coefficients and marginals', echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+cm <- c('(Intercept)' = 'Constant')
+msummary(list( probit, probit_marg),
+         fmt="%.3f",
+         gof_omit = 'DF|Deviance|Log.Lik.|F|R2 Adj.|AIC|BIC',
+         stars=c('*' = .05, '**' = .01),
+         coef_rename = cm)
+```
+
+#### Demographical variables ####
+
+Most of the demographical variables are significant. For age we included the quadratic form, in which we can see that the *age_sq* is positive so the function is convex, but other than that, the coefficients don't have a clear interpretation. Significant *high_ed* has a marginal difference of 0.012, meaning that on average higher educated people have 1.2 percentage point higher chance to subscribe for a term loan than people without higher education ceteris paribus. For jobs, the reference category was people working in admin positions and only services, enterpreneur and blue-collar workers had significantly different chances (coefficients estimates were all negative) at 5% significance. 
+
+#### Campaign specifics, and time variables ####
+
+We have many significant variables in these categories and interpretation of all of these variables would be hard, but there are a few things that are worth noting. When it comes to the seasons, people contacted in the summer were associated with a higher probability to subscribe compared to the ones contacted in autumn if we were to keep other variables unchanced. Duration is also in quadratic form, but based on variable importance it is the single most important variable in the analysis. People who were contacted with success in a previous campaign had 17.3 percentage points higher chance to subscribe than those who failed to do given every other variable is the same. This is a very important finding,it shows it is worth talking to people in another campaign if they successfully subscribe in an earlier one. Similarly interpreting the contact variable, it is worth contacting people through cellular phones.
+
+#### Macroeconomic variables ####
+
+Each variable was significant even at 1%, which shows that it is worth including such variables in our models. This was also proven earlier when choosing the model, as they improved the fit of the model quite well. Without giving a proper interpretation from the marginal coefficients it is visible that higher consumer price index and euribor rate are associated with higher chances of a person subscribing for a term loan while low employment variation meant higher chance for subscription as well. These are pretty much in line with general expectations, if the interest is high and unemployment rate decreases, people are more willing to put their money in the bank. But all in all these are rather important from a perspective of prediction.
+
+## Summary ## 
+
+In this paper I analysed the relationship of information known about the clients and the probability of someone subscribing for a term loan in a telemarketing campaign. I used linear probability models and furthermore logit and probit models to uncover this relationship in details on data made public by a Portuguese bank. My results imply that there are lessons we can learn from the data. Based on the data, those contacted before with success might have a higher possibility to subscribe again in another one. It might also make sense to target people with a higher educational background through cellular phones rather than telephone. Macroeconomic variables also play a role, so if the anyone wishes to develop models for prediction should take these into account. I believe my findings can be useful for marketing managers to improve the efficiency of campaigns and reduce costs of their operations.
+
+\newpage
+## Appendix ##
+
+```{r, include = FALSE}
+
+# plotting histograms/barplots
+qual_plotHist <- function(data_in, i, bins = NULL,angle = 0) {
+    data <- data.frame(x=data_in[[i]])
+    p <- ggplot(data=data, aes(x=factor(x),fill=factor(data_in$output))) +
+        stat_count(color= 'black') +
+        labs(x = colnames(data_in)[i], fill = 'Sucessfull campaign?') + 
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = angle, hjust =1),legend.position = 'bottom')+
+        scale_fill_viridis(discrete = TRUE, option = "D")
+    return (p)
+}
+
+
+quant_plotHist <- function(data_in, i, bins = 15, angle = NULL) {
+    data <- data.frame(x=data_in[[i]])
+    p <- ggplot(data=data, aes(x=x, fill = factor(data_in$output)))  +
+        geom_histogram( bins=bins, color = 'black')+#, alpha = .2 , color = 'black', position = 'fill')+
+        labs(x = colnames(data_in)[i], fill = 'Sucessfull campaign?') + 
+        theme_minimal() +
+        theme(legend.position = 'bottom')+
+        scale_fill_viridis(discrete = TRUE, option = "D")
+    return (p)
+}
+
+
+plots <- function(data,fun,from=1,to=4,ncol = 2, nrow = 2, bins = rep(15,(to-from)+1), angle = rep(0,(to-from)+1)) {
+    
+    plot_list <- list()
+    
+    for(i in from:to){
+        p<- fun(data,i, bins[i], angle[i])
+        plot_list <- c(plot_list, list(p))
+    }
+    
+    return(do.call('grid.arrange', c(plot_list,ncol=ncol,nrow=nrow)))
+    
+}
+
+#reorder df so that output is last observation
+qual_df<- qual_df[c(1,2,3,4,5,6,7,9,10,8)]
+```
+```{r plot_histograms_quant,fig.cap= 'Histograms of quantitative variables', fig.height= 10, fig.width = 10, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+plots(data=quant_df, fun= quant_plotHist, from = 1, to =9,ncol = 3, nrow =3, bins = c(15,15,15,7,20,15,15,15,20))
+```
+\newpage
+```{r plot_histograms_qual,fig.cap= 'Histograms of qualitative variables', fig.height= 10, fig.width = 10, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+plots(data=qual_df, fun= qual_plotHist, from = 1, to =9,ncol = 3, nrow =3, angle= c(45,0,0,0,0,0,0,0,0))
+```
+\newpage
+```{r corrplot,fig.cap= 'Correlation matrix of quantitative variables', fig.height= 4, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+cors = cor(quant_df)
+
+corrplot(cors , 
+         type = 'upper', 
+         order = 'hclust', 
+         tl.col = 'black', tl.srt= 45, number.cex = .7,
+         addCoef.col = 'black',method = 'color', 
+         col = colorRampPalette(c('yellow','white','purple'))(10))
+```
+
+
+```{r lpm_summary, tab.height = 20, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+
+#Create stargazer summary table with all 6 regressions 
+#texreg(list( lpm6),fontsize = 'tiny', table = FALSE, use.packages = FALSE, float.pos = 'h')
+stargazer(lpm1,lpm5,lpm6,digits=2, single.row = TRUE, column.sep.width = "1pt", header = FALSE)         
+```
+
+```{r logit_probit_plot,fig.cap= 'visualising logit, probit and lpm', fig.height= 4, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+# visualisation
+ggplot(data = df) +
+    geom_point(aes(x=lpm6_pred, y=pred_probit, color="Probit"), size=1,  shape=16, color = 'gold') +
+    geom_point(aes(x=lpm6_pred, y=pred_logit,  color="Logit"), size=1,  shape=16, color = 'purple') +
+    geom_line(aes(x=lpm6_pred, y=lpm6_pred,    color="45 degree line"), size=1, color = 'navyblue') +
+    labs(x = "Predicted probability of successfull campaign (LPM)", y="Predicted probability")+
+    scale_y_continuous(expand = c(0.00,0.0), limits = c(0,1), breaks = seq(0,1,0.1)) +
+    scale_x_continuous(expand = c(0.00,0.0), limits = c(0,1), breaks = seq(0,1,0.1)) +
+    scale_color_manual(name = "", values=c("green", "red","blue"))+
+    theme(legend.position=c(0.55,0.08),
+          legend.direction = "horizontal",
+          legend.text = element_text(size = 4))+
+    theme_minimal() 
+```
+
+```{r calibration,fig.cap= 'Calibration curve for probit model', fig.height= 4, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+
+actual_vs_predicted <- df %>%
+    ungroup() %>% 
+    dplyr::select(actual = output, 
+                  predicted = pred_probit) 
+
+num_groups <- 10
+
+calibration_d <- actual_vs_predicted %>%
+    mutate(predicted_score_group = dplyr::ntile(predicted, num_groups))%>%
+    group_by(predicted_score_group) %>%
+    dplyr::summarise(mean_actual = mean(actual), 
+                     mean_predicted = mean(predicted), 
+                     num_obs = n())
+
+g1 <- ggplot( calibration_d,aes(x = mean_actual, y = mean_predicted)) +
+    geom_point( color='purple', size=1.5, alpha=0.8) +
+    geom_line(  color='purple', size=1  , alpha=0.8) +
+    geom_abline( intercept = 0, slope = 1, color='gold') +
+    labs( x = "Actual event probability", y = "Predicted event probability") +
+    scale_x_continuous(expand = c(0.01,0.01), limits = c(0,1), breaks = seq(0,1,0.1)) +
+    scale_y_continuous(expand = c(0.01,0.01), limits = c(0,1), breaks = seq(0,1,0.1))
+
+g1
+```
+
+```{r confusion_matrix,fig.cap= 'Confusion matrix for probit model', fig.height= 4, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
+
+df$pred_probit_bin <- ifelse(df$pred_probit > 0.4, 1, 0)
+cm <- confusionMatrix(factor(df$pred_probit_bin), factor(df$output))
+fourfoldplot(cm$table)
+```

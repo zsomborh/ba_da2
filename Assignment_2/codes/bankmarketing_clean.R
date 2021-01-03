@@ -1,7 +1,7 @@
 # Getting the raw data ----------------------------------------------------
 
 library(tidyverse)
-df <- read_delim('https://raw.githubusercontent.com/zsomborh/ba_da2/main/Assignment_2/bank-additional-full.csv', delim = ';')
+df <- read_delim('https://raw.githubusercontent.com/zsomborh/ba_da2/main/Assignment_2/data/raw/bank-additional-full.csv', delim = ';')
 
 # Resolve Data Quality issues ---------------------------------------------
 
