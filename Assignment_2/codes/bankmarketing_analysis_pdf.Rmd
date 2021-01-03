@@ -102,7 +102,7 @@ print(xtb, comment=FALSE, include.rownames=FALSE, scalebox='0.75')
 
 In the EDA phase my goal was twofold, and I only looked at the quantitative variables. On the one hand I wanted to see if the correlation between variables can give me a better understanding on my dataset, and if there are any highly correlated variables that I might not keep after all. On the other hand I wanted to see if there is any non-linearity between the explanatory variables and the dependent variable. 
 
-Correlations can be seen in Figure 2 in the Appendix. The correlation matrix shows that there is a very strong positive correlation between macroeconomic variables, which was not very surprising given that all of them have the same underlying driver - the strength of the local/European economy. It is worth to note that the data was recorded in the midst of a financial crises. In addition to that, these metrics were updated on a monthly, or quarterly basis, and kept flat throught the course of the period so high correlation is even less surprising. It could have been argued that leaving these highly correlated variables out is sensible, however I decided not to drop them as later on they were useful contributors and improved the model fit. We could also see that they are mildy negatively correlated with the dependent variable, called *output*.
+Correlations can be seen in as the third figure in the Appendix. The correlation matrix shows that there is a very strong positive correlation between macroeconomic variables, which was not very surprising given that all of them have the same underlying driver - the strength of the local/European economy. It is worth to note that the data was recorded in the midst of a financial crises. In addition to that, these metrics were updated on a monthly, or quarterly basis, and kept flat throught the course of the period so high correlation is even less surprising. It could have been argued that leaving these highly correlated variables out is sensible, however I decided not to drop them as later on they were useful contributors and improved the model fit. We could also see that they are mildy negatively correlated with the dependent variable, called *output*.
 
 I also used a non-parametric regression model, **lowess** to see the relationship between some explanatory variables and the dependent variable. There were three interesting cases that can be seen in Figure 1. There is a non-linear relationship between *age* and the probability of success of a telemarketing campaign. The lowess resembles a quadratic function that has it's maximum at around age 45. There is a similar convex curve when using *duration* as explanatory variable. It seems that longer phone calls were associated with higher probabilities of success, which is quite intuitive, if people are not willing to consider subscribing, they wouldn't talk on the phone for too long. Lastly, *campaign* variable shows that after 15 tries, average probabilities for success were close to 0 which is also intutive - nobody likes to be harassed by their bank. 
 
@@ -144,7 +144,7 @@ My goal is to uncover the pattern of association between the success of a market
 
 #### Experimenting with LPM ####
 
-My dataset is quite rich in both categorical and numerical variables, but perhaps I can drop some of them to reduce the complexity. This is a tradeoff that I am willing to take - if my ultimate goal was prediction, I might have included every variable, but in this case, I am fine to leave out some that might not improve the fit of the model, or that are not significant. I also used log transformation on *campaign* variable, and will use the second order polynomial of *age* and *duration*. Table 3 shows three models, where the first one has variables from the demographic category only, the second has every available variable included and in the third, I removed only the following variables as they were not significant and variable importance was also seemed very low: *weekdays, fin loan, housing, cons.conf.idx, campaign_ln, previous, marital*. 
+My dataset is quite rich in both categorical and numerical variables, but perhaps I can drop some of them to reduce the complexity. This is a tradeoff that I am willing to take - if my ultimate goal was prediction, I might have included every variable, but in this case, I am fine to leave out some that might not improve the fit of the model, or that are not significant. I also used log transformation on *campaign* variable, and will use the second order polynomial of *age* and *duration*. Table 3 in the appendix shows three models, where the first one has variables from the demographic category only, the second has every available variable included and in the third, I removed only the following variables as they were not significant and variable importance was also seemed very low: *weekdays, fin loan, housing, cons.conf.idx, campaign_ln, previous, marital*. 
 
 There is a great improvement in the model fit with the inclusion of more and more variables, however with that complexity also increases. Model summary with all sequential steps is available in my [github repo]('https://github.com/zsomborh/ba_coding2/tree/main/Assignment2/out'), under *lpms_comparison.html*. The last model's variables (later on referred to as *reduced model*) are the ones that I will use going forward as that is the simplest model, with a realtively good fit.
 
@@ -209,7 +209,7 @@ probit_marg <- probitmfx( formula = output~. , data=df[,keep_vars], atmean=FALSE
 
 ```
 
-Choosing the final model came down to three options, the last LPM which had some dropped variables, logit and probit. In order to be able to make a choice between them I looked at model statistics that indicate how good a fit each model can provide. To do this I looked at the R^2^ and a pseudo R^2^ that can be used when evaulating logit and probit models. I also added a Brier score and checked if these variables had bias. These are available in Table 3 with the addition of a simple LPM included that has demographic variables only - to see the improvement. All models performed quite well, but the probit was a tiny bit more convincing (higher McFadden R^2^ and lower Brier score), that is why my model choice will be the **probit model**.
+Choosing the final model came down to three options, the last LPM which had some dropped variables, logit and probit. In order to be able to make a choice between them I looked at model statistics that indicate how good a fit each model can provide. To do this I looked at the R^2^ and a pseudo R^2^ that can be used when evaulating logit and probit models. I also added a Brier score and checked if these variables had bias. These are available in Table 2 with the addition of a simple LPM included that has demographic variables only - to see the improvement. All models performed quite well, but the probit was a tiny bit more convincing (higher McFadden R^2^ and lower Brier score), that is why my model choice will be the **probit model**.
 
 ```{r model_fits_prep, include = FALSE }
 
@@ -305,9 +305,9 @@ print(xtb, comment=FALSE, include.rownames=FALSE, scalebox='0.75')
 
 ## Robustness check ##
  
-To see how robust is the used probit model I used a calibration curve and also checked the accuracy of its predictions compared to a baseline model. Before going further it is important to note that the goal was not prediction, and when mentioning prediction in this document what I mean is model implied dependent variables on the whole dataset, and not predicted outputs of test subsets. The calibration curve can be seen in Figure 3 of the Appendix and it shows that the model predicted outputs are very close to the 45 degree line. This is what we expected, as we saw a very small bias for the probit model - it is now visually proven that this model is well calibrated. 
+To see how robust is the used probit model I used a calibration curve and also checked the accuracy of its predictions compared to a baseline model. Before going further it is important to note that the goal was not prediction, and when mentioning prediction in this document what I mean is model implied dependent variables on the whole dataset, and not predicted outputs of test subsets. The calibration curve can be seen in the 5th figure of the Appendix and it shows that the model predicted outputs are very close to the 45 degree line. This is what we expected, as we saw a very small bias for the probit model - it is now visually proven that this model is well calibrated. 
 
-I also checked the accuracy of my model, where accuracy here is defined as how many times did the prediction matched exactly the actual dependent variable. This is a naive approach, but one that is only used to get more comfort over using the probit model. The goal here for the model to outperform a baseline model, that is a prediction of 0 for every observation. These seemed a sensible baseline given the low proportion of successfull campaigns in the data (ca. 11%). And the probit beat the baseline as the accuracy of probit is: 91.23%, while the accuracy of baseline is: 88.87%, so with using the model we can improve 2.36 percentage points. This is a good improvement, but not a great one, and there would be room for improvement if the model was to be used for prediction. The confusion matrix in Figure 4 is also available to see the number of false positives and false negatives.
+I also checked the accuracy of my model, where accuracy here is defined as how many times did the prediction matched exactly the actual dependent variable. This is a naive approach, but one that is only used to get more comfort over using the probit model. The goal here for the model to outperform a baseline model, that is a prediction of 0 for every observation. These seemed a sensible baseline given the low proportion of successfull campaigns in the data (ca. 11%). And the probit beat the baseline as the accuracy of probit is: 91.23%, while the accuracy of baseline is: 88.87%, so with using the model we can improve 2.36 percentage points. This is a good improvement, but not a great one, and there would be room for improvement if the model was to be used for prediction. The confusion matrix in the 6th figure of the appendix is also available to see the number of false positives and false negatives.
 
 ## Results ##
 
@@ -402,7 +402,7 @@ corrplot(cors ,
          addCoef.col = 'black',method = 'color', 
          col = colorRampPalette(c('yellow','white','purple'))(10))
 ```
-
+\newpage
 
 ```{r lpm_summary, tab.height = 20, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
 
@@ -410,7 +410,7 @@ corrplot(cors ,
 #texreg(list( lpm6),fontsize = 'tiny', table = FALSE, use.packages = FALSE, float.pos = 'h')
 stargazer(lpm1,lpm5,lpm6,digits=2, single.row = TRUE, column.sep.width = "1pt", header = FALSE)         
 ```
-
+\newpage
 ```{r logit_probit_plot,fig.cap= 'visualising logit, probit and lpm', fig.height= 4, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
 # visualisation
 ggplot(data = df) +
@@ -426,7 +426,7 @@ ggplot(data = df) +
           legend.text = element_text(size = 4))+
     theme_minimal() 
 ```
-
+\newpage
 ```{r calibration,fig.cap= 'Calibration curve for probit model', fig.height= 4, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
 
 actual_vs_predicted <- df %>%
@@ -453,7 +453,7 @@ g1 <- ggplot( calibration_d,aes(x = mean_actual, y = mean_predicted)) +
 
 g1
 ```
-
+\newpage
 ```{r confusion_matrix,fig.cap= 'Confusion matrix for probit model', fig.height= 4, echo = FALSE , results = "asis", warning = FALSE, message = FALSE }
 
 df$pred_probit_bin <- ifelse(df$pred_probit > 0.4, 1, 0)
